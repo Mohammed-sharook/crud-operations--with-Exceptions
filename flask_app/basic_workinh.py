@@ -1,59 +1,87 @@
-from flask import Flask, redirect, render_template, request
+from flask import Flask, request, jsonify, abort
 from flask_mysqldb import MySQL
+
 app = Flask(__name__)
 
 
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = '9944394985'
-app.config['MYSQL_DB'] = 'users'
+app.config['MYSQL_DB'] = 'crud'
 
 db = MySQL(app)
 
 
 @app.route("/")
 def home_page():
-    return render_template('home.html')
+    return "<h1>Home page</h1>"
 
 
-@app.route("/about")
-def about_page():
-    return render_template('about.html')
-
-
-@app.route("/login", methods=["GET", "POST"])           # Create
-def login_page():
-    if request.method == 'POST':
-        details = request.form
-        name = details['name']
-        email = details['email']
-        my_cursor = db.connection.cursor()
-        my_cursor.execute("insert into user(name,email) values(%s,%s)",(name, email))
-        db.connection.commit()
-        my_cursor.close()
-        return redirect('/details')
-    return render_template('login.html')
-
-
-@app.route('/details')                                # Read
-def data():
+@app.route('/detail/<int:user_id>')
+def details(user_id):
     cursor = db.connection.cursor()
-    cursor.execute("select * from user")
-    result = cursor.fetchall()
-    return render_template('data.html', res = result)
+    cursor.execute("select * from users where user_id=%s", (user_id,))
+    result = cursor.fetchone()
+    return jsonify(result)
 
 
-@app.route('/delete', methods = ["GET", "POST"])      # Delete
-def delete():
-    if request.method == "POST":
-        form = request.form
-        email = form['email']
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    try:
+        if request.method == 'POST':
+            income_data = request.get_json()
+            email = income_data['email']
+            name = income_data['name']
+            my_cursor = db.connection.cursor()
+            my_cursor.execute("insert into users(user_name,user_email) values(%s,%s)", (name, email))
+            db.connection.commit()
+            my_cursor.close()
+            return jsonify('user added successfully')
+    except TypeError:
+        return jsonify({"exception": "TypeError",
+                        "email": None,
+                        "name": None
+                        })
+
+    except KeyError:
+        return jsonify({"Exception": "KeyError"})
+
+
+@app.route("/update/<int:user_id>", methods=['PUT'])
+def update(user_id):
+    try:
+        if request.method == "PUT":
+            income_data = request.get_json()
+            email = income_data['email']
+            cursor = db.connection.cursor()
+            cursor.execute("update users set user_email=%s where user_id = %s", (email,user_id))
+            db.connection.commit()
+            cursor.close()
+            return jsonify("Email changed for user {}".format(user_id))
+
+    except KeyError:
+        return jsonify({"keyError":'email'})
+
+    except TypeError:
+        return jsonify({"exception": "TypeError",
+                        "email": None,
+                        "name": None
+                        })
+
+
+@app.route('/delete/<int:user_id>', methods=["DELETE"])
+def delete(user_id):
+    if request.method == "DELETE":
         cursor = db.connection.cursor()
-        cursor.execute("delete from user where email = %s", (email,))
+        cursor.execute("delete from users where user_id = %s", (user_id,))
         db.connection.commit()
         cursor.close()
-        return redirect("/details")
-    return render_template('delete.html')
+        return jsonify({'deleted_user_id': user_id})
+
+
+@app.errorhandler(404)
+def error_handler(e):
+    return jsonify({"exception": "URL not exists", "status": 404})
 
 
 if __name__ == '__main__':
